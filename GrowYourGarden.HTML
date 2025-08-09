@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>2D Gardening Game</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #9ddc8c;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+    }
+    #shop, #gearShop, #garden {
+        background: #fff8dc;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        display: inline-block;
+        vertical-align: top;
+    }
+    .plot {
+        width: 60px;
+        height: 60px;
+        background: #7c5c37;
+        border: 2px solid #4a3220;
+        display: inline-block;
+        margin: 5px;
+        position: relative;
+        cursor: pointer;
+    }
+    .plant {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+    }
+    button {
+        padding: 5px 10px;
+        margin: 5px;
+        cursor: pointer;
+    }
+    .duck {
+        font-size: 50px;
+        animation: waddle 1s infinite alternate;
+    }
+    @keyframes waddle {
+        from { transform: translateX(-5px) rotate(-5deg); }
+        to { transform: translateX(5px) rotate(5deg); }
+    }
+</style>
+</head>
+<body>
+
+<h1>🌱 Gardening Game</h1>
+<p>Coins: <span id="coins">50</span></p>
+
+<div id="shop">
+    <h2>Seed Shop</h2>
+</div>
+
+<div id="gearShop">
+    <h2>Duck's Gear Shop 🦆</h2>
+    <p class="duck">🦆</p>
+    <p id="duckDialogue">Quack! Want some farming gear?</p>
+</div>
+
+<div id="garden">
+    <h2>Garden</h2>
+    <div id="plots"></div>
+</div>
+
+<script>
+let coins = 50;
+let inventory = "";
+let plots = [];
+let growthBoost = 1;
+let sellBoost = 1;
+
+// Seeds with rare flag
+let seeds = {
+    carrot:  { cost: 30, reward: Math.round(30 * 1.1), growTime: 4000, color: "orange", rare: false },
+    tomato:  { cost: 45, reward: Math.round(45 * 1.1), growTime: 5000, color: "red", rare: false },
+    corn:    { cost: 60, reward: Math.round(60 * 1.1), growTime: 6000, color: "yellow", rare: false },
+    lettuce: { cost: 35, reward: Math.round(35 * 1.1), growTime: 3500, color: "lightgreen", rare: false },
+    pumpkin: { cost: 90, reward: Math.round(90 * 1.1), growTime: 8000, color: "darkorange", rare: true },
+    blueberry: { cost: 55, reward: Math.round(55 * 1.1), growTime: 4500, color: "blue", rare: false },
+    strawberry: { cost: 75, reward: Math.round(75 * 1.1), growTime: 5500, color: "pink", rare: true },
+    dragonfruit: { cost: 150, reward: Math.round(150 * 1.1), growTime: 10000, color: "purple", rare: true },
+    starfruit: { cost: 200, reward: Math.round(200 * 1.1), growTime: 12000, color: "gold", rare: true },
+    kiwi: { cost: 50, reward: Math.round(50 * 1.1), growTime: 4500, color: "lightyellow", rare: false }
+};
+
+let rareAvailable = false;  // Tracks if rare seeds are currently available
+
+// Toggle rare seed availability every 20 minutes
+function updateRareSeedAvailability() {
+    rareAvailable = !rareAvailable; // toggle
+    updateShopButtons();
+    // Schedule next toggle in 20 minutes
+    setTimeout(updateRareSeedAvailability, 20 * 60 * 1000);
+}
+
+function updateCoins() {
+    document.getElementById("coins").innerText = coins;
+}
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function buildShop() {
+    let shopDiv = document.getElementById("shop");
+    shopDiv.innerHTML = "<h2>Seed Shop</h2>"; // reset shop
+
+    for (let seed in seeds) {
+        let seedInfo = seeds[seed];
+        let btn = document.createElement("button");
+        btn.innerText = `${capitalize(seed)} Seed (${seedInfo.cost} coins)`;
+        btn.dataset.seed = seed;
+
+        if (seedInfo.rare && !rareAvailable) {
+            btn.disabled = true;
+            btn.title = "Rare seed! Available only every 20 minutes.";
+        } else {
+            btn.disabled = false;
+            btn.title = "";
+            btn.onclick = () => buySeed(seed);
+        }
+
+        shopDiv.appendChild(btn);
+        shopDiv.appendChild(document.createElement("br"));
+    }
+}
+
+let gear = {
+    wateringCan: { cost: 80, effect: () => { growthBoost = 0.7; }, description: "Grow crops faster!" },
+    fertilizer:  { cost: 120, effect: () => { sellBoost = 1.5; }, description: "Earn more coins per harvest!" },
+    goldenHoe:   { cost: 200, effect: () => { growthBoost = 0.5; sellBoost = 2; }, description: "Super speed & profit!" }
+};
+
+function buildGearShop() {
+    let gearDiv = document.getElementById("gearShop");
+    gearDiv.innerHTML = "<h2>Duck's Gear Shop 🦆</h2><p class=\"duck\">🦆</p><p id=\"duckDialogue\">Quack! Want some farming gear?</p>";
+
+    for (let item in gear) {
+        let btn = document.createElement("button");
+        btn.innerText = `${capitalize(item)} (${gear[item].cost} coins)`;
+        btn.onclick = () => buyGear(item);
+        gearDiv.appendChild(btn);
+        let desc = document.createElement("p");
+        desc.innerText = gear[item].description;
+        gearDiv.appendChild(desc);
+    }
+}
+
+function buySeed(type) {
+    let cost = seeds[type].cost;
+    if (coins >= cost) {
+        coins -= cost;
+        inventory = type;
+        updateCoins();
+        document.getElementById("duckDialogue").innerText = `Quack! Plant that ${type} fast!`;
+    } else {
+        document.getElementById("duckDialogue").innerText = "Quack? You need more coins.";
+    }
+}
+
+function buyGear(item) {
+    let cost = gear[item].cost;
+    if (coins >= cost) {
+        coins -= cost;
+        gear[item].effect();
+        updateCoins();
+        document.getElementById("duckDialogue").innerText = `Quack! Your ${capitalize(item)} is ready!`;
+    } else {
+        document.getElementById("duckDialogue").innerText = "Quack... not enough coins.";
+    }
+}
+
+function createGarden(rows, cols) {
+    let garden = document.getElementById("plots");
+    for (let i = 0; i < rows * cols; i++) {
+        let plot = document.createElement("div");
+        plot.className = "plot";
+        plot.dataset.status = "empty";
+        plot.onclick = () => plantSeed(plot);
+        garden.appendChild(plot);
+        plots.push(plot);
+    }
+}
+
+function plantSeed(plot) {
+    if (plot.dataset.status === "empty" && inventory !== "") {
+        let type = inventory;
+        inventory = "";
+        plot.dataset.status = "planted";
+        plot.dataset.type = type;
+
+        let plant = document.createElement("div");
+        plant.className = "plant";
+        plant.style.background = seeds[type].color;
+        plant.style.transform = "scale(0.2)";
+        plot.appendChild(plant);
+
+        let size = 0.2;
+        let grow = setInterval(() => {
+            size += 0.1;
+            plant.style.transform = `scale(${size})`;
+        }, (seeds[type].growTime * growthBoost) / 8);
+
+        setTimeout(() => {
+            clearInterval(grow);
+            plot.dataset.status = "grown";
+        }, seeds[type].growTime * growthBoost);
+
+    } else if (plot.dataset.status === "grown") {
+        let type = plot.dataset.type;
+        coins += Math.round(seeds[type].reward * sellBoost);
+        updateCoins();
+        plot.innerHTML = "";
+        plot.dataset.status = "empty";
+    }
+}
+
+// Update shop buttons state
+function updateShopButtons() {
+    buildShop();
+}
+
+// Initialize game
+buildShop();
+buildGearShop();
+createGarden(2, 5);
+updateCoins();
+updateRareSeedAvailability();
+
+</script>
+
+</body>
+</html>
